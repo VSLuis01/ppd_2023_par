@@ -2,15 +2,11 @@
 // Created by luis on 27/05/23.
 //
 
-#ifndef PPD_2023_SEQ_SDL_UTILS_H
-#define PPD_2023_SEQ_SDL_UTILS_H
+#ifndef PPD_2023_PAR_SDL_UTILS_H
+#define PPD_2023_PAR_SDL_UTILS_H
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include "../structures/grafo.h"
-
-// Função de renderização do grafo
-typedef void (*RenderFunction)(Grafo*);
 
 /**
  * @brief Inicializa a janela do SDL (window e renderer)
@@ -71,8 +67,9 @@ void sdlRenderizarCirculo(SDL_Point pos, int raio, SDL_Colour color, const char*
  */
 void sdlRenderizarLinha(SDL_Point p1, SDL_Point p2, SDL_Colour color, const char* label);
 
-void desenharGrafo(Grafo* grafo);
+void desenharGrafoMatrizAdj(int **matrizAdj, int numVertices);
 
-void renderizarGrafo(Grafo* grafo, RenderFunction renderFunction);
+void desenharGrafo(const void* arestas, int numArestas, int numVertices);
 
-#endif //PPD_2023_SEQ_SDL_UTILS_H
+
+#endif //PPD_2023_PAR_SDL_UTILS_H

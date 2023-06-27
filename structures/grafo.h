@@ -2,8 +2,8 @@
 // Created by luis on 26/05/23.
 //
 
-#ifndef PPD_2023_SEQ_GRAFO_H
-#define PPD_2023_SEQ_GRAFO_H
+#ifndef PPD_2023_PAR_GRAFO_H
+#define PPD_2023_PAR_GRAFO_H
 typedef struct {
     int v; /*Vértice 1*/
     int w; /*Vértice 2*/
@@ -80,4 +80,4 @@ void inserirVerticeDireto(Grafo *grafo, int v);
 void deleteGrafo(Grafo *grafo);
 
 
-#endif //PPD_2023_SEQ_GRAFO_H
+#endif //PPD_2023_PAR_GRAFO_H

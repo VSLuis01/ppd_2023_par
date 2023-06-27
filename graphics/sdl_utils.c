@@ -20,8 +20,10 @@ SDL_Surface *superficieTexto;
 SDL_Texture *texturaTexto;
 
 typedef struct {
-    SDL_Point pos;
-} PosicoesVertices;
+    int v; /*Vértice 1*/
+    int w; /*Vértice 2*/
+    int peso;
+} Aresta_SDL;
 
 int seed = 16;
 
@@ -199,11 +201,14 @@ int hash(int x) {
     return x;
 }
 
-void desenharGrafo(Grafo *grafo) {
+void desenharGrafo(const void* arestas, int numArestas, int numVertices) {
+    Aresta_SDL *aresta = (Aresta_SDL*) arestas;
+
     // Determine a largura e altura da janela
     int larguraJanela, alturaJanela;
     int raioVertice = 10;
     SDL_GetRendererOutputSize(renderer, &larguraJanela, &alturaJanela);
+
 
     // Calcule o raio máximo permitido com base nas dimensões da janela
     int raioMaximo = (larguraJanela < alturaJanela ? larguraJanela : alturaJanela) / 3;
@@ -212,20 +217,20 @@ void desenharGrafo(Grafo *grafo) {
     int centerX = larguraJanela / 2;
     int centerY = alturaJanela / 2;
 
-    for (int i = 0; i < grafo->A; ++i) {
+    for (int i = 0; i < numArestas; ++i) {
         // Gere um raio aleatório para o vértice atual
-        int raioV = (hash(grafo->arestas[i].v) % raioMaximo) + 150;
-        int raioW = (hash(grafo->arestas[i].w) % raioMaximo) + 150;
+        int raioV = (hash(aresta[i].v) % raioMaximo) + 150;
+        int raioW = (hash(aresta[i].w) % raioMaximo) + 150;
 
         // Calcule o ângulo de separação entre os vértices
-        double anguloSeparacao = 2 * M_PI / grafo->V;
+        double anguloSeparacao = 2 * M_PI / numVertices;
 
         // Calcule o ângulo atual para o vértice atual
 
         //Desenhar vertice V
-        double anguloV = grafo->arestas[i].v * anguloSeparacao;
+        double anguloV = aresta[i].v * anguloSeparacao;
         char labelV[10];
-        sprintf(labelV, "%d", grafo->arestas[i].v);
+        sprintf(labelV, "%d", aresta[i].v);
 
         // Calcule as coordenadas do vértice com base no raio e no ângulo
         int posXVerticeV = centerX + raioV * cos(anguloV);
@@ -233,9 +238,9 @@ void desenharGrafo(Grafo *grafo) {
 
 
         //Desenhar vertice W
-        double anguloW = grafo->arestas[i].w * anguloSeparacao;
+        double anguloW = aresta[i].w * anguloSeparacao;
         char labelW[10];
-        sprintf(labelW, "%d", grafo->arestas[i].w);
+        sprintf(labelW, "%d", aresta[i].w);
 
         // Calcule as coordenadas do vértice com base no raio e no ângulo
         int posXVerticeW = centerX + raioW * cos(anguloW);
@@ -244,7 +249,7 @@ void desenharGrafo(Grafo *grafo) {
 
         //Desenhar aresta
         char labelAresta[10];
-        sprintf(labelAresta, "%d", grafo->arestas[i].peso);
+        sprintf(labelAresta, "%d", aresta[i].peso);
         sdlRenderizarLinha((SDL_Point) {posXVerticeV, posYVerticeV},
                            (SDL_Point) {posXVerticeW, posYVerticeW},
                            (SDL_Colour) {0, 0, 255, 255},
@@ -257,6 +262,9 @@ void desenharGrafo(Grafo *grafo) {
         // Desenhe o vértice W na posição calculada
         sdlRenderizarCirculo((SDL_Point) {posXVerticeW, posYVerticeW}, raioVertice, (SDL_Colour) {255, 0, 0, 255}, labelW);
     }
+}
+
+void desenharGrafoMatrizAdj(int **matrizAdj, int numVertices) {
 
 }
 
@@ -268,10 +276,5 @@ void setSeed(int newSeed) {
     seed = newSeed;
 }
 
-void renderizarGrafo(Grafo *grafo, RenderFunction renderFunction) {
-    // Configurações do layout do grafo
-    // Chamar a função de renderização específica
-    renderFunction(grafo);
-}
 
 
