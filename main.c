@@ -1,114 +1,127 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <mpi/mpi.h>
 
-
-typedef struct Vertice {
-    long destino;
+typedef struct No {
+    long vertice;
     long peso;
-    struct Vertice* prox;
-} Vertice;
+    struct No* proximo;
+} No;
 
-typedef struct ListaAdj {
-    Vertice* cabeca;
-} ListaAdj;
+typedef struct GrafoAdjPonderado {
+    long numVertices;
+    long numArestas;
+    No** lista;
+} GrafoAdjPonderado;
 
-Vertice* novoNo(long destino, long peso) {
-    Vertice* no = (Vertice*)malloc(sizeof(Vertice));
-    no->destino = destino;
-    no->peso = peso;
-    no->prox = NULL;
-    return no;
+// Função para criar um novo nó da lista de adjacência
+No* criarNo(long vertice, long peso) {
+    No* novoNo = (No*)malloc(sizeof(No));
+    novoNo->vertice = vertice;
+    novoNo->peso = peso;
+    novoNo->proximo = NULL;
+    return novoNo;
 }
 
-void adicionarAresta(ListaAdj* lista, long destino, long peso) {
-    Vertice* novo = novoNo(destino, peso);
-    novo->prox = lista->cabeca;
-    lista->cabeca = novo;
+// Função para criar um grafo ponderado com o número especificado de vértices
+GrafoAdjPonderado* criarGrafo(long numVertices, long numArestas) {
+    GrafoAdjPonderado* grafo = (GrafoAdjPonderado*)malloc(sizeof(GrafoAdjPonderado));
+    grafo->numVertices = numVertices;
+    grafo->numArestas = numArestas;
+
+    // Cria uma lista de adjacência para cada vértice
+    grafo->lista = (No**)malloc(numVertices * sizeof(No*));
+    long i;
+    for (i = 0; i < numVertices; i++) {
+        grafo->lista[i] = NULL;
+    }
+
+    return grafo;
 }
 
-ListaAdj* lerArquivo(const char* arquivo, long* numVertices) {
-    FILE* file = fopen(arquivo, "r");
-    if (file == NULL) {
+// Função para adicionar uma aresta ponderada ao grafo
+void adicionarAresta(GrafoAdjPonderado* grafo, long verticeOrigem, long verticeDestino, long peso) {
+    // Adiciona uma aresta ponderada do vérticeOrigem para o vérticeDestino
+
+    // Cria um novo nó para o vérticeDestino com o peso da aresta
+    No* novoNo = criarNo(verticeDestino, peso);
+
+    // Insere o nó no início da lista de adjacência do vérticeOrigem
+    novoNo->proximo = grafo->lista[verticeOrigem];
+    grafo->lista[verticeOrigem] = novoNo;
+
+    // Como o grafo é não direcionado, também adicionamos uma aresta do vérticeDestino para o vérticeOrigem
+    novoNo = criarNo(verticeOrigem, peso);
+    novoNo->proximo = grafo->lista[verticeDestino];
+    grafo->lista[verticeDestino] = novoNo;
+}
+
+// Função para exibir o grafo ponderado
+void printGrafo(GrafoAdjPonderado* grafo) {
+    long i;
+    printf("Número de vértices: %ld, número de arestas: %ld\n", grafo->numVertices, grafo->numArestas);
+    printf("Lista de adjacência do grafo:\n");
+    for (i = 0; i < grafo->numVertices; i++) {
+        No* atual = grafo->lista[i];
+        printf("Vértice %ld: ", i);
+        while (atual != NULL) {
+            printf("(%ld, peso-%ld) -> ", atual->vertice, atual->peso);
+            atual = atual->proximo;
+        }
+        printf("NULL\n");
+    }
+}
+
+// Função para liberar a memória alocada pelo grafo
+void deleteGrafo(GrafoAdjPonderado* grafo) {
+    if (grafo) {
+        long i;
+        for (i = 0; i < grafo->numVertices; i++) {
+            No* atual = grafo->lista[i];
+            while (atual != NULL) {
+                No* temp = atual;
+                atual = atual->proximo;
+                free(temp);
+            }
+        }
+        free(grafo->lista);
+        free(grafo);
+    }
+}
+
+GrafoAdjPonderado* lerArquivoGrafo(const char* nomeArquivo) {
+    FILE* arquivo = fopen(nomeArquivo, "r");
+    if (arquivo == NULL) {
         printf("Erro ao abrir o arquivo.\n");
         return NULL;
     }
 
-    if (fscanf(file, "%ld\n", numVertices) != 1) {
-        printf("Erro ao ler a quantidade de vértices do arquivo.\n");
-        fclose(file);
-        return NULL;
+    // Leitura do número de nós e arestas
+    long numVertices, numArestas;
+    fscanf(arquivo, "%ld%ld", &numVertices, &numArestas);  // Removido o caractere '\n' após %ld
+
+
+    // Criação do grafo com o número de nós lido
+    GrafoAdjPonderado* grafo = criarGrafo(numVertices, numArestas);
+
+    // Leitura das arestas e adição ao grafo
+    long verticeOrigem, verticeDestino, peso;
+    while (fscanf(arquivo, "%ld%ld%ld", &verticeOrigem, &verticeDestino, &peso) != EOF) {
+        adicionarAresta(grafo, verticeOrigem, verticeDestino, peso);
     }
 
-    ListaAdj* listaAdj = (ListaAdj*)malloc((*numVertices) * sizeof(ListaAdj));
-
-    long numArestas;
-    if (fscanf(file, "%ld\n", &numArestas) != 1) {
-        printf("Erro ao ler a quantidade de arestas do arquivo.\n");
-        fclose(file);
-        free(listaAdj);
-        return NULL;
-    }
-
-    for (long i = 0; i < *numVertices; i++) {
-        listaAdj[i].cabeca = NULL;
-    }
-
-    for (long i = 0; i < numArestas; i++) {
-        long no, aresta, peso;
-        if (fscanf(file, "%ld %ld %ld\n", &no, &aresta, &peso) != 3) {
-            printf("Erro ao ler a linha %ld do arquivo.\n", i + 3);
-            fclose(file);
-            for (long j = 0; j < *numVertices; j++) {
-                Vertice* atual = listaAdj[j].cabeca;
-                while (atual != NULL) {
-                    Vertice* prox = atual->prox;
-                    free(atual);
-                    atual = prox;
-                }
-            }
-            free(listaAdj);
-            return NULL;
-        }
-
-        adicionarAresta(&listaAdj[no], aresta, peso);
-    }
-
-    fclose(file);
-    return listaAdj;
+    fclose(arquivo);
+    return grafo;
 }
 
-void imprimirGrafo(ListaAdj* grafo, long numVertices) {
-    for (long i = 0; i < numVertices; i++) {
-        Vertice* atual = grafo[i].cabeca;
-        printf("Vértice %ld: ", i);
-        while (atual != NULL) {
-            printf("(%ld, %ld) ", atual->destino, atual->peso);
-            atual = atual->prox;
-        }
-        printf("\n");
-    }
-}
-
-void liberarGrafo(ListaAdj* grafo, long numVertices) {
-    for (long i = 0; i < numVertices; i++) {
-        Vertice* atual = grafo[i].cabeca;
-        while (atual != NULL) {
-            Vertice* prox = atual->prox;
-            free(atual);
-            atual = prox;
-        }
-    }
-    free(grafo);
-}
 
 int main() {
-    long numVertices;
-    ListaAdj *grafo = lerArquivo("dados_entrada_paralelo.txt", &numVertices);
+    const char* nomeArquivo = "dados_entrada_paralelo.txt";
+    GrafoAdjPonderado* grafo = lerArquivoGrafo(nomeArquivo);
 
-//    imprimirGrafo(grafo, numVertices);
-
-    liberarGrafo(grafo, numVertices);
+    if (grafo != NULL) {
+        printGrafo(grafo);
+        deleteGrafo(grafo);
+    }
 
     return 0;
 }
