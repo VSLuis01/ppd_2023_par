@@ -25,7 +25,7 @@ void criarTipoAresta() {
     MPI_Type_commit(&MPI_Aresta);
 }
 
-void lerArquivo(int rank, int size, int* total_vertices, int* total_arestas, Aresta** arestasLocal) {
+void lerArquivo(int rank, int* total_vertices, int* total_arestas, Aresta** arestasLocal) {
     FILE *arquivo;
 
     if (rank == ROOT) {
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
 
     criarTipoAresta();
 
-    lerArquivo(rank, size, &total_vertices, &total_arestas, &arestasLocal);
+    lerArquivo(rank, &total_vertices, &total_arestas, &arestasLocal);
     if (rank == ROOT) {
         distribuirArestas(size, total_arestas, arestasLocal);
     }
