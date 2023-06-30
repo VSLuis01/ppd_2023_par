@@ -120,3 +120,5 @@ fabric.properties
 ofiles
 # executable
 main
+basear.c
+*.txt
