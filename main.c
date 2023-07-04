@@ -11,7 +11,7 @@
 typedef struct node {
     struct node *raiz;
     int rank;
-} UnionFindStruct;
+} Conjunto;
 
 typedef struct {
     long u;
@@ -23,16 +23,37 @@ FILE *arquivo; // arquivo de leitura das arestas
 
 MPI_Datatype MPI_Aresta; // tipo de aresta do MPI
 
+long quantidadeArestasLocal = 0; // quantidade de arestas desse processador
 Aresta *arestas;
+
+long quantidadeArestasAGM = 0;
 Aresta *arvoreGeradoraMinima;
-long quantidadeArestasLocal; // quantidade de arestas desse processador
 
 int rank, size; // identificação do processador e quantidade de processadores
-UnionFindStruct unionFind; // contem todos os vertices
+Conjunto *conjunto; // contem todos os vertices
 
 long totalArestas, totalVertices; // numero total de arestas e vertices
 
-void debug(int rank, char *format, ...);
+void debug(char *format, ...);
+
+int comparacaoArestas(const void *aresta1, const void *aresta2);
+
+Conjunto *find(Conjunto *no) {
+    if (no->raiz == NULL) return no;
+    no->raiz = find(no->raiz);
+    return no->raiz;
+}
+
+void unionConjunto(Conjunto *no1, Conjunto *no2) {
+    if (no1->rank < no2->rank) {
+        no1->raiz = no2;
+    } else if (no1->rank > no2->rank) {
+        no2->raiz = no1;
+    } else {
+        no1->raiz = no2;
+        no1->rank += 1;
+    }
+}
 
 void printarArestas() {
     int i;
@@ -86,10 +107,6 @@ void obterArestasVertices(const char *nomeArquivo) {
        }*/
 }
 
-bool intervalo(long vertice, long inferior, long superior) {
-    return ((vertice >= inferior) && (vertice < superior));
-}
-
 void distribuirArestasPorProcessador() {
     long verticePorProcessador = totalVertices / size;
     long primeiroVertice = rank * verticePorProcessador;
@@ -115,8 +132,6 @@ void distribuirArestasPorProcessador() {
         abortProgram("\n[ERRO] erro ao alocar arestas da agm.\n");
     }
 
-    quantidadeArestasLocal = 0;
-
     Aresta tmp;
     for (long i = 0; i < totalArestas; i++) {
         fscanf(arquivo, "%ld %ld %ld", &tmp.v, &tmp.u, &tmp.peso);
@@ -129,6 +144,27 @@ void distribuirArestasPorProcessador() {
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
+
+void encontrarAGM() {
+    qsort(arestas, quantidadeArestasLocal, sizeof(Aresta), comparacaoArestas);
+
+    // criar estrutura do union find
+    // raiz = NULL e rank = 0
+    free(conjunto);
+    conjunto = calloc(totalVertices, sizeof(Conjunto));
+
+    for (long i = 0; i < totalArestas; ++i) {
+        Conjunto *raizV = find(&conjunto[arestas[i].v]);
+        Conjunto *raizU = find(&conjunto[arestas[i].u]);
+
+        if (raizV != raizU) {
+            arvoreGeradoraMinima[quantidadeArestasAGM] = arestas[i];
+            quantidadeArestasAGM++;
+            unionConjunto(raizV, raizU);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     const char *nomeArquivo = "arquivo.txt";
     inicializacao(argc, argv);
@@ -138,7 +174,17 @@ int main(int argc, char **argv) {
 
     distribuirArestasPorProcessador();
 
-    printarArestas();
+    encontrarAGM();
+
+    /*for (int i = 0; i < quantidadeArestasLocal; ++i) {
+        debug("ANTES>>(%ld,%ld) = %ld\n", arestas[i].v, arestas[i].u, arestas[i].peso);
+    }
+
+    for (int i = 0; i < quantidadeArestasAGM; ++i) {
+        debug("DEPOIS>>(%ld,%ld) = %ld\n", arvoreGeradoraMinima[i].v, arvoreGeradoraMinima[i].u, arvoreGeradoraMinima[i].peso);
+    }
+    printf("\n");
+     */
 
     finalizacao();
     return 0;
@@ -146,18 +192,31 @@ int main(int argc, char **argv) {
 
 double get_timer() {
     clock_t current_clock = clock();
-    double timer = (double)current_clock / CLOCKS_PER_SEC;
+    double timer = (double) current_clock / CLOCKS_PER_SEC;
 
     return timer;
 }
 
-void debug(int rank, char *format, ...) {
+void debug(char *format, ...) {
     va_list args;
 
     va_start(args, format);
 
-    printf("%12.6f|%2d|", get_timer(), rank);
+    printf("%6.6f|%2d|", get_timer(), rank);
     vprintf(format, args);
 
     va_end(args);
+}
+
+int comparacaoArestas(const void *aresta1, const void *aresta2) {
+    Aresta *a1 = (Aresta *) aresta1;
+    Aresta *a2 = (Aresta *) aresta2;
+
+    if (a1->peso > a2->peso) {
+        return 1;
+    } else if (a1->peso < a2->peso) {
+        return -1;
+    } else {
+        return 0;
+    }
 }
