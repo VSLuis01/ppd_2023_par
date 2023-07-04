@@ -1,7 +1,10 @@
 #include <mpi/mpi.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
+#define ROOT 0
+#define RANGE(vertice, inferior, superior) ((vertice) >= (inferior) && (vertice) < (superior))
 
 typedef struct node {
     struct node *raiz;
@@ -18,13 +21,24 @@ FILE *arquivo; // arquivo de leitura das arestas
 
 MPI_Datatype MPI_Aresta; // tipo de aresta do MPI
 
+Aresta *arestas;
+Aresta *arvoreGeradoraMinima;
+long quantidadeArestasLocal; // quantidade de arestas desse processador
+
 int rank, size; // identificação do processador e quantidade de processadores
 UnionFindStruct unionFind; // contem todos os vertices
 
 long totalArestas, totalVertices; // numero total de arestas e vertices
 
-void abortProgram(const char *mensagem) {
+void printarArestas() {
+    int i;
+    printf("Proc %d local edges:\n", rank);
+    for (i = 0; i < quantidadeArestasLocal; ++i) {
+        printf("(%ld,%ld) = %ld\n", arestas[i].v, arestas[i].u, arestas[i].peso);
+    }
+}
 
+void abortProgram(const char *mensagem) {
     perror(mensagem);
 
     fclose(arquivo);
@@ -44,9 +58,10 @@ void inicializacao(int argc, char **argv) {
 }
 
 void finalizacao() {
-    fclose(arquivo);
     MPI_Type_free(&MPI_Aresta);
     MPI_Finalize();
+    free(arestas);
+    free(arvoreGeradoraMinima);
 }
 
 void obterArestasVertices(const char *nomeArquivo) {
@@ -62,17 +77,64 @@ void obterArestasVertices(const char *nomeArquivo) {
     fscanf(arquivo, "%ld", &totalVertices);
     fscanf(arquivo, "%ld", &totalArestas);
 
- /*   if (totalVertices / size < 2) {
-        abortProgram("\n[ERRO] Numero de vertices por processador deve ser pelo menos 2\n");
-    }*/
+    /*   if (totalVertices / size < 2) {
+           abortProgram("\n[ERRO] Numero de vertices por processador deve ser pelo menos 2\n");
+       }*/
+}
+
+bool intervalo(long vertice, long inferior, long superior) {
+    return ((vertice >= inferior) && (vertice < superior));
+}
+
+void distribuirArestasPorProcessador() {
+    long verticePorProcessador = totalVertices / size;
+    long primeiroVertice = rank * verticePorProcessador;
+    long ultimoVertice = (rank + 1) * verticePorProcessador;
+
+    // ultimo processador fica com o restando dos vertices (caso tiver)
+    if (rank == size - 1) {
+        ultimoVertice += totalVertices % size;
+        verticePorProcessador += totalVertices % size;
+    }
+
+    // alocar memória das arestas
+    arestas = (Aresta *) malloc(verticePorProcessador * totalVertices * sizeof(Aresta));
+
+    if (arestas == NULL) {
+        abortProgram("\n[ERRO] erro ao alocar arestas\n");
+    }
+
+    // numero de arestas de um arvore é igual ao numero de vertices - 1
+    arvoreGeradoraMinima = (Aresta *) malloc((totalVertices - 1) * sizeof(Aresta));
+
+    if (arvoreGeradoraMinima == NULL) {
+        abortProgram("\n[ERRO] erro ao alocar arestas da agm.\n");
+    }
+
+    quantidadeArestasLocal = 0;
+
+    Aresta tmp;
+    for (long i = 0; i < totalArestas; i++) {
+        fscanf(arquivo, "%ld %ld %ld", &tmp.v, &tmp.u, &tmp.peso);
+        if (RANGE(tmp.v, primeiroVertice, ultimoVertice) || RANGE(tmp.u, primeiroVertice, ultimoVertice)) {
+            arestas[quantidadeArestasLocal]= tmp;
+            quantidadeArestasLocal++;
+        }
+    }
+    fclose(arquivo);
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 int main(int argc, char **argv) {
-    const char* nomeArquivo = "arquivo.txt";
+    const char *nomeArquivo = "arquivo.txt";
     inicializacao(argc, argv);
     obterArestasVertices(nomeArquivo);
 
-    printf("\n[RANK] %d - TOTAL VERTICES: %ld - TOTAL ARESTAS: %ld\n", rank, totalVertices, totalArestas);
+//    printf("\n[RANK] %d - TOTAL VERTICES: %ld - TOTAL ARESTAS: %ld\n", rank, totalVertices, totalArestas);
+
+    distribuirArestasPorProcessador();
+
+    printarArestas();
 
     finalizacao();
     return 0;
