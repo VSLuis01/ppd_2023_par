@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <time.h>
 
 #define ROOT 0
 #define RANGE(vertice, inferior, superior) ((vertice) >= (inferior) && (vertice) < (superior))
@@ -29,6 +31,8 @@ int rank, size; // identificação do processador e quantidade de processadores
 UnionFindStruct unionFind; // contem todos os vertices
 
 long totalArestas, totalVertices; // numero total de arestas e vertices
+
+void debug(int rank, char *format, ...);
 
 void printarArestas() {
     int i;
@@ -117,7 +121,7 @@ void distribuirArestasPorProcessador() {
     for (long i = 0; i < totalArestas; i++) {
         fscanf(arquivo, "%ld %ld %ld", &tmp.v, &tmp.u, &tmp.peso);
         if (RANGE(tmp.v, primeiroVertice, ultimoVertice) || RANGE(tmp.u, primeiroVertice, ultimoVertice)) {
-            arestas[quantidadeArestasLocal]= tmp;
+            arestas[quantidadeArestasLocal] = tmp;
             quantidadeArestasLocal++;
         }
     }
@@ -138,4 +142,22 @@ int main(int argc, char **argv) {
 
     finalizacao();
     return 0;
+}
+
+double get_timer() {
+    clock_t current_clock = clock();
+    double timer = (double)current_clock / CLOCKS_PER_SEC;
+
+    return timer;
+}
+
+void debug(int rank, char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+
+    printf("%12.6f|%2d|", get_timer(), rank);
+    vprintf(format, args);
+
+    va_end(args);
 }
