@@ -382,6 +382,37 @@ void encontrarArestasFaltantes() {
         MPI_Recv(todosVertices, totalVerticesGlobal, MPI_Vertice, ROOT, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
+
+    Vertices *verticesVerificados = malloc(quantidadeVerticesLocal * sizeof(Vertices));
+    memset(verticesVerificados, -1, quantidadeVerticesLocal * sizeof(Vertices));
+    for (u_int64_t i = 0; i < quantidadeArestasLocal; ++i) {
+        Vertices localV = verticesLocal[hash(arestasLocal[i].v)];
+        Vertices localU = verticesLocal[hash(arestasLocal[i].u)];
+
+        Vertices globalV = todosVertices[hash(arestasLocal[i].v)];
+        Vertices glovalU = todosVertices[hash(arestasLocal[i].u)];
+
+        if (localV.grau == globalV.grau) {
+            verticesVerificados[hash(localV.v)] = localV;
+        }
+
+        if (localU.grau == glovalU.grau) {
+            verticesVerificados[hash(localU.v)] = localU;
+        }
+
+        if (verticesVerificados[hash(localV.v)].v != -1 && verticesVerificados[hash(localU.v)].v != -1) continue;
+
+        for (u_int64_t j = 0; j < totalArestasRanks; ++j) {
+            if (j != rdispls[rank]) {
+
+            } else {
+                j = j + quantidadeArestasRanks[rank] - 1;
+            }
+        }
+
+    }
+
+
     u_int64_t quantInseridasRecent = 1;
     u_int64_t verticesPercorridos = 0; // utilizado para verificar se já percorreu a quantidade de vertices locais, evitando iterações desnecessárias
 //    Aresta *inseridasRecente = malloc(quantInseridasRecent * sizeof(Aresta)); // utilizado para verificar se a mesma aresta já foi inserida recentemente, evitando arestas repetidas
