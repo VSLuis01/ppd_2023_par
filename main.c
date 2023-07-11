@@ -65,10 +65,30 @@ u_int64_t hash(u_int64_t v) {
 void printVertices() {
     debug("Total vertice local: %lu\n", quantidadeVerticesLocal);
     for (u_int64_t i = 0; i < totalVerticesGlobal; ++i) {
-        if (verticesLocal[i].v != -1) {
+        if (verticesLocal[i].v != -1UL) {
             debug("Vertice :%lu (%lu)\n", verticesLocal[i].v, verticesLocal[i].grau);
         }
     }
+    printf("\n");
+}
+
+void printVerticesGlobais() {
+    debug("Total vertice local: %lu\n", totalVerticesGlobal);
+    for (u_int64_t i = 0; i < totalVerticesGlobal; ++i) {
+        if (verticesLocal[i].v != -1UL) {
+            debug("Vertice: %lu (%lu)\n", verticesCompleto[i].v, verticesCompleto[i].grau);
+        }
+    }
+    printf("\n");
+}
+
+void printArestasGlobais() {
+    u_int64_t i = 0;
+    u_int64_t pesoTotal = 0;
+    for (; i < totalArestasGlobal; ++i) {
+        debug("%lu %lu %lu\n", arestasCompleto[i].u, arestasCompleto[i].v, arestasCompleto[i].peso);
+    }
+    debug("Peso parcial/total: %lu\n", pesoTotal);
     printf("\n");
 }
 
@@ -77,7 +97,7 @@ void printArestas() {
     u_int64_t i = 0;
     u_int64_t pesoTotal = 0;
     for (; i < quantidadeArestasLocal; ++i) {
-//        debug("(%lu  %lu)  =>  %lu\n", arestasLocal[i].u, arestasLocal[i].v, arestasLocal[i].peso);
+        debug("%lu %lu %lu\n", arestasLocal[i].u, arestasLocal[i].v, arestasLocal[i].peso);
         pesoTotal += arestasLocal[i].peso;
     }
     debug("Peso parcial/total: %lu\n", pesoTotal);
@@ -175,15 +195,25 @@ void distribuirArestasPorProcessador() {
     // Processo mestre lê todas as arestasLocal do arquivo
     if (rank == ROOT) {
         arestasCompleto = malloc(totalArestasGlobal * sizeof(Aresta));
-        verticesCompleto = calloc(totalVerticesGlobal, sizeof(Vertices));
+        verticesCompleto = malloc(totalVerticesGlobal * sizeof(Vertices));
+        memset(verticesCompleto, -1, totalVerticesGlobal * sizeof(Vertices));
         for (u_int64_t i = 0; i < totalArestasGlobal; i++) {
             fscanf(arquivo, "%lu %lu %lu", &arestasCompleto[i].u, &arestasCompleto[i].v, &arestasCompleto[i].peso);
-            // total de verticesCompleto e seus graus
-            verticesCompleto[hash(arestasCompleto[i].u)].v = arestasCompleto[i].u;
-            verticesCompleto[hash(arestasCompleto[i].u)].grau += 1;
 
-            verticesCompleto[hash(arestasCompleto[i].v)].v = arestasCompleto[i].v;
-            verticesCompleto[hash(arestasCompleto[i].v)].grau += 1;
+            // total de verticesCompleto e seus graus
+            if (verticesCompleto[hash(arestasCompleto[i].u)].v == -1UL) {
+                verticesCompleto[hash(arestasCompleto[i].u)].v = arestasCompleto[i].u;
+                verticesCompleto[hash(arestasCompleto[i].u)].grau = 1;
+            } else {
+                verticesCompleto[hash(arestasCompleto[i].u)].grau += 1;
+            }
+
+            if (verticesCompleto[hash(arestasCompleto[i].v)].v == -1UL) {
+                verticesCompleto[hash(arestasCompleto[i].v)].grau = 1;
+                verticesCompleto[hash(arestasCompleto[i].v)].v = arestasCompleto[i].v;
+            } else {
+                verticesCompleto[hash(arestasCompleto[i].v)].grau += 1;
+            }
         }
 
         fclose(arquivo);
@@ -225,12 +255,11 @@ void distribuirArestasPorProcessador() {
     }
 
     // Distribui as arestasLocal para cada processo
-    MPI_Scatterv(arestasCompleto, quantidadesArestasPorRank, deslocamentos, MPI_Aresta, arestasLocal,
-                 quantidadeArestasLocal, MPI_Aresta, ROOT, MPI_COMM_WORLD);
-
+    MPI_Scatterv(arestasCompleto, quantidadesArestasPorRank, deslocamentos, MPI_Aresta, arestasLocal, quantidadeArestasLocal, MPI_Aresta, ROOT, MPI_COMM_WORLD);
 
     // Verificar os verticesLocal disponíveis e o grau deles;
-    verticesLocal = calloc(totalVerticesGlobal, sizeof(Vertices));
+    verticesLocal = malloc(totalVerticesGlobal * sizeof(Vertices));
+    memset(verticesLocal, -1, totalVerticesGlobal * sizeof(Vertices));
     mergedAGM = malloc(2 * (totalVerticesGlobal - 1) * sizeof(Aresta));
     arvoreGeradoraMinimaLocal = malloc((totalVerticesGlobal - 1) * sizeof(Aresta));
 
@@ -244,22 +273,23 @@ void distribuirArestasPorProcessador() {
         abortProgram(mensagem);
     }
 
-
     // Verificar os verticesLocal disponíveis e o grau deles;
     for (u_int64_t i = 0; i < quantidadeArestasLocal; ++i) {
-
-        if (verticesLocal[hash(arestasLocal[i].v)].v == 0) {
+        if (verticesLocal[hash(arestasLocal[i].v)].v == -1UL) {
+            verticesLocal[hash(arestasLocal[i].v)].v = arestasLocal[i].v;
+            verticesLocal[hash(arestasLocal[i].v)].grau = 1;
             quantidadeVerticesLocal++;
+        } else {
+            verticesLocal[hash(arestasLocal[i].v)].grau += 1;
         }
-        verticesLocal[hash(arestasLocal[i].v)].grau += 1;
-        verticesLocal[hash(arestasLocal[i].v)].v = arestasLocal[i].v;
 
-        if (verticesLocal[hash(arestasLocal[i].u)].v == 0) {
+        if (verticesLocal[hash(arestasLocal[i].u)].v == -1UL) {
+            verticesLocal[hash(arestasLocal[i].u)].v = arestasLocal[i].u;
+            verticesLocal[hash(arestasLocal[i].u)].grau = 1;
             quantidadeVerticesLocal++;
+        } else {
+            verticesLocal[hash(arestasLocal[i].u)].grau += 1;
         }
-        verticesLocal[hash(arestasLocal[i].u)].v = arestasLocal[i].u;
-        verticesLocal[hash(arestasLocal[i].u)].grau += 1;
-
     }
 
     free(quantidadesArestasPorRank);
@@ -307,24 +337,36 @@ void encontrarArestasFaltantes() {
     // Array para armazenar a quantidade de arestas de cada processo
     u_int64_t *quantidadeArestasRanks = malloc(size * sizeof(u_int64_t));
 
+    if (quantidadeArestasRanks == NULL) {
+        abortProgram("[ERRO] Problema ao alocar arestas dos outros ranks\n");
+        return;
+    }
+
     // Coletar a quantidade de arestas e arestasLocal de cada processo no processo raiz
     MPI_Gather(&quantidadeArestasLocal, 1, MPI_UINT64_T, quantidadeArestasRanks, 1, MPI_UINT64_T, ROOT, MPI_COMM_WORLD);
 
     // Transmitir a quantidade de vértices e arestasLocal de cada processo para todos os outros processos
     MPI_Bcast(quantidadeArestasRanks, size, MPI_UINT64_T, ROOT, MPI_COMM_WORLD);
 
+    u_int64_t totalArestasRanks = 0;
+
+    int *recvcounts = malloc(size * sizeof(int));
+    int *rdispls = malloc(size * sizeof(int));
+
+    for (int i = 0; i < size; ++i) {
+        totalArestasRanks += quantidadeArestasRanks[i];
+        recvcounts[i] = quantidadeArestasRanks[i];
+    }
+    rdispls[0] = 0;
+    for (int i = 1; i < size; ++i) {
+        rdispls[i] = rdispls[i - 1] + recvcounts[i - 1];
+    }
+
     // matriz que possui as arestas de cada rank
     // cada linha são as arestas de um rank respectivamente
-    Aresta **arestasRanks = malloc(size * sizeof(Aresta *));
+    Aresta *arestasRanksArray = malloc(totalArestasRanks * sizeof(Aresta));
 
-    /*Recebendo as arestasLocal de cada rank*/
-    for (int i = 0; i < size; i++) {
-        if (i != rank) {
-            arestasRanks[i] = malloc(quantidadeArestasRanks[i] * sizeof(Aresta));
-            MPI_Send(arestasLocal, quantidadeArestasLocal, MPI_Aresta, i, 0, MPI_COMM_WORLD);
-            MPI_Recv(arestasRanks[i], quantidadeArestasRanks[i], MPI_Aresta, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
-    }
+    MPI_Allgatherv(arestasLocal, quantidadeArestasLocal, MPI_Aresta, arestasRanksArray, recvcounts, rdispls, MPI_Aresta, MPI_COMM_WORLD);
 
     // esse vetor será utilizado para comprar se o vertice local já atingiu a quantidade maxima de ligações
     Vertices *todosVertices = NULL; // todos as vertices do arquivo
@@ -342,54 +384,49 @@ void encontrarArestasFaltantes() {
 
     u_int64_t quantInseridasRecent = 1;
     u_int64_t verticesPercorridos = 0; // utilizado para verificar se já percorreu a quantidade de vertices locais, evitando iterações desnecessárias
-    Aresta *inseridasRecente = malloc(
-            quantInseridasRecent *
-            sizeof(Aresta)); // utilizado para verificar se a mesma aresta já foi inserida recentemente, evitando arestas repetidas
+//    Aresta *inseridasRecente = malloc(quantInseridasRecent * sizeof(Aresta)); // utilizado para verificar se a mesma aresta já foi inserida recentemente, evitando arestas repetidas
     for (u_int64_t i = 0; i < totalVerticesGlobal && verticesPercorridos < quantidadeVerticesLocal; ++i) {
         // percorre cada vertice local verificando as conexoes faltantes
-        if (verticesLocal[i].v != -1) {
+        if (verticesLocal[i].v != -1UL) {
             Vertices verticeLocal = verticesLocal[i];
             // caso o rank for o ROOT verifica o grau no vetor verticesCompleto ou inves do todosVertices
-            Vertices verticeTodos =
-                    rank != ROOT ? todosVertices[hash(verticeLocal.v)] : verticesCompleto[hash(verticeLocal.v)];
-
+            Vertices verticeTodos = rank != ROOT ? todosVertices[hash(verticeLocal.v)] : verticesCompleto[hash(verticeLocal.v)];
+            if (verticeLocal.grau == verticeTodos.grau) continue;
             bool possuiGrauMaximo = false; // caso o vertice possuir o grau maximo, sai dos loops e vai pro proxximo vertice
             // percorre as arestas de cada processo, caso o grau maximo do vertice nao seja atingido
-            for (int processo = 0; processo < size && !possuiGrauMaximo; ++processo) {
-                if (processo != rank) {
-                    for (u_int64_t k = 0; k < quantidadeArestasRanks[processo] && !possuiGrauMaximo; ++k) {
-                        if (verticeLocal.grau == verticeTodos.grau) {
-                            possuiGrauMaximo = true;
-                        } else {
-                            Aresta arestaProcesso = arestasRanks[processo][k];
-                            // Encontrou uma aresta faltante para o vertice já que as arestas de cada processo sao disjuntas
-                            // isInseridaRecentemente é utilizado para evitar triangulações (evitar inserir arestas que já existem).
-                            if ((arestaProcesso.v == verticeLocal.v || arestaProcesso.u == verticeLocal.v) &&
-                                !isInseridaRecentemente(inseridasRecente, quantInseridasRecent, arestaProcesso)) {
-//                                debug("(%lu %lu) => %lu ARESTA FALTANTE do vertice %lu\n", arestaProcesso.u, arestaProcesso.v, arestaProcesso.peso, verticeLocal.v);
-                                inserirAresta(arestaProcesso, &arestasLocal, &quantidadeArestasLocal);
-                                inserirAresta(arestaProcesso, &inseridasRecente, &quantInseridasRecent);
-                                verticeLocal.grau++;
-                                verticesLocal[i].grau = verticeLocal.grau;
-                            }
+            for (u_int64_t j = 0; j < totalArestasRanks && !possuiGrauMaximo; ++j) {
+                if (j != rdispls[rank]) {
+                    if (verticeLocal.grau == verticeTodos.grau) {
+                        possuiGrauMaximo = true;
+                    } else {
+                        Aresta arestaProcesso = arestasRanksArray[j];
+                        // Encontrou uma aresta faltante para o vertice já que as arestas de cada j sao disjuntas
+                        // isInseridaRecentemente é utilizado para evitar triangulações (evitar inserir arestas que já existem).
+                        if ((arestaProcesso.v == verticeLocal.v || arestaProcesso.u == verticeLocal.v)) {
+                            inserirAresta(arestaProcesso, &arestasLocal, &quantidadeArestasLocal);
+//                            inserirAresta(arestaProcesso, &inseridasRecente, &quantInseridasRecent);
+                            verticeLocal.grau++;
+                            verticesLocal[i].grau = verticeLocal.grau;
                         }
                     }
+                } else {
+                    j = j + quantidadeArestasRanks[rank] - 1;
                 }
             }
             verticesPercorridos++;
         }
     }
 
+    debug("Terminei\n");
+
     // Liberar a memória alocada
-    for (int i = 0; i < size; ++i) {
-        if (i != rank) {
-            free(arestasRanks[i]);
-        }
-    }
-    free(arestasRanks);
-    free(inseridasRecente);
+    free(arestasRanksArray);
+//    free(inseridasRecente);
     free(todosVertices);
     free(quantidadeArestasRanks);
+
+    free(recvcounts);
+    free(rdispls);
 
     // garantir que todos processos encontrem as conexoes faltantes antes de realizar o calculo da agm
     MPI_Barrier(MPI_COMM_WORLD);
@@ -462,7 +499,6 @@ int main(int argc, char **argv) {
         }
     }
 
-
     obterArestasVertices(argv[1]);
 
     if (totalVerticesGlobal / size < 2) {
@@ -476,7 +512,6 @@ int main(int argc, char **argv) {
     // encontra as conexoes faltantes para cada vértice.
     // Nao é preciso esse processamento se tiver apenas um processador
     if (size > 1) {
-        MPI_Barrier(MPI_COMM_WORLD);
         encontrarArestasFaltantes();
     }
 
@@ -501,17 +536,17 @@ int main(int argc, char **argv) {
                 destination = (rank - (int) pow(2, it)); // rank of destination
 
                 MPI_Send(arvoreGeradoraMinimaLocal, quantidadeArestasAGMLocal, MPI_Aresta, destination, 0, MPI_COMM_WORLD);
-                debug("[%d] Enviando a arvore para o rank %d -- SAINDO....\n", it, destination);
+//                debug("[%d] Enviando a arvore para o rank %d -- SAINDO....\n", it, destination);
                 break;
             } else {
                 source = (rank + (int) pow(2, it)); // rank of source
-                debug("[%d] Recebendo agm do rank: %d\n", it, source);
 
                 MPI_Recv(recvAGM, totalVerticesGlobal - 1, MPI_Aresta, source, 0, MPI_COMM_WORLD, &status);
+//                debug("[%d] Recebendo agm do rank: %d\n", it, source);
                 MPI_Get_count(&status, MPI_Aresta, &quantArestasRecvAGM);
             }
 
-            for (u_int64_t i = 0; i < quantArestasRecvAGM; ++i) {
+            for (int32_t i = 0; i < quantArestasRecvAGM; ++i) {
                 Aresta arestaRecv = recvAGM[i];
                 mergedAGM[quantArestasMergedAGM++] = arestaRecv;
             }
