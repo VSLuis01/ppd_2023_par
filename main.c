@@ -383,70 +383,47 @@ void encontrarArestasFaltantes() {
     }
 
 
-    Vertices *verticesVerificados = malloc(quantidadeVerticesLocal * sizeof(Vertices));
-    memset(verticesVerificados, -1, quantidadeVerticesLocal * sizeof(Vertices));
     for (u_int64_t i = 0; i < quantidadeArestasLocal; ++i) {
         Vertices localV = verticesLocal[hash(arestasLocal[i].v)];
         Vertices localU = verticesLocal[hash(arestasLocal[i].u)];
 
-        Vertices globalV = todosVertices[hash(arestasLocal[i].v)];
-        Vertices glovalU = todosVertices[hash(arestasLocal[i].u)];
+        Vertices globalV = rank != ROOT ? todosVertices[hash(arestasLocal[i].v)] : verticesCompleto[hash(arestasLocal[i].v)];
+        Vertices glovalU = rank != ROOT ? todosVertices[hash(arestasLocal[i].u)] : verticesCompleto[hash(arestasLocal[i].u)];
 
-        if (localV.grau == globalV.grau) {
-            verticesVerificados[hash(localV.v)] = localV;
+
+        if (localV.grau == globalV.grau && localU.grau == glovalU.grau) {
+            if (rank == ROOT) {
+                debug("[%lu - %lu] Vertices %lu (%lu / %lu) e %lu (%lu / %lu) completos\n", i, quantidadeArestasLocal, localV.v, localV.grau, globalV.grau, localU.v, localV.grau, globalV.grau);
+            }
+            continue;
         }
-
-        if (localU.grau == glovalU.grau) {
-            verticesVerificados[hash(localU.v)] = localU;
-        }
-
-        if (verticesVerificados[hash(localV.v)].v != -1 && verticesVerificados[hash(localU.v)].v != -1) continue;
 
         for (u_int64_t j = 0; j < totalArestasRanks; ++j) {
             if (j != rdispls[rank]) {
+
+                if (localV.grau == globalV.grau && localU.grau == glovalU.grau) {
+                    // Atualiza os graus
+                    verticesLocal[hash(arestasLocal[i].v)].grau = localV.grau;
+                    verticesLocal[hash(arestasLocal[i].u)].grau = localU.grau;
+                    break;
+                }
+
+                if ((localV.grau != globalV.grau) && (localV.v == arestasRanksArray[j].v || localV.v == arestasRanksArray[j].u)) {
+                    // Insere a aresta
+                    localV.grau++;
+                }
+
+                if ((localU.grau != glovalU.grau) && (localU.v == arestasRanksArray[j].v || localU.v == arestasRanksArray[j].u)) {
+                    // Insere a aresta
+                    localU.grau++;
+                }
 
             } else {
                 j = j + quantidadeArestasRanks[rank] - 1;
             }
         }
-
     }
 
-
-    u_int64_t quantInseridasRecent = 1;
-    u_int64_t verticesPercorridos = 0; // utilizado para verificar se já percorreu a quantidade de vertices locais, evitando iterações desnecessárias
-//    Aresta *inseridasRecente = malloc(quantInseridasRecent * sizeof(Aresta)); // utilizado para verificar se a mesma aresta já foi inserida recentemente, evitando arestas repetidas
-    for (u_int64_t i = 0; i < totalVerticesGlobal && verticesPercorridos < quantidadeVerticesLocal; ++i) {
-        // percorre cada vertice local verificando as conexoes faltantes
-        if (verticesLocal[i].v != -1UL) {
-            Vertices verticeLocal = verticesLocal[i];
-            // caso o rank for o ROOT verifica o grau no vetor verticesCompleto ou inves do todosVertices
-            Vertices verticeTodos = rank != ROOT ? todosVertices[hash(verticeLocal.v)] : verticesCompleto[hash(verticeLocal.v)];
-            if (verticeLocal.grau == verticeTodos.grau) continue;
-            bool possuiGrauMaximo = false; // caso o vertice possuir o grau maximo, sai dos loops e vai pro proxximo vertice
-            // percorre as arestas de cada processo, caso o grau maximo do vertice nao seja atingido
-            for (u_int64_t j = 0; j < totalArestasRanks && !possuiGrauMaximo; ++j) {
-                if (j != rdispls[rank]) {
-                    if (verticeLocal.grau == verticeTodos.grau) {
-                        possuiGrauMaximo = true;
-                    } else {
-                        Aresta arestaProcesso = arestasRanksArray[j];
-                        // Encontrou uma aresta faltante para o vertice já que as arestas de cada j sao disjuntas
-                        // isInseridaRecentemente é utilizado para evitar triangulações (evitar inserir arestas que já existem).
-                        if ((arestaProcesso.v == verticeLocal.v || arestaProcesso.u == verticeLocal.v)) {
-                            inserirAresta(arestaProcesso, &arestasLocal, &quantidadeArestasLocal);
-//                            inserirAresta(arestaProcesso, &inseridasRecente, &quantInseridasRecent);
-                            verticeLocal.grau++;
-                            verticesLocal[i].grau = verticeLocal.grau;
-                        }
-                    }
-                } else {
-                    j = j + quantidadeArestasRanks[rank] - 1;
-                }
-            }
-            verticesPercorridos++;
-        }
-    }
 
     debug("Terminei\n");
 
